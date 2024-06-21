@@ -1,6 +1,6 @@
 import os
 import time
-from typing import Optional
+from typing import Optional, List, Tuple
 import requests
 
 MAX_ALLOWED_TRIALS = 7
@@ -21,12 +21,14 @@ class LlamaSampler:
 
     def __init__(
         self,
-        model: str = "meta-llama/Llama-3-8b-chat-hf",
+        # model: str = "meta-llama/Llama-3-8b-chat-hf",
+        model: str = "meta-llama/Llama-3-8b-hf",
         system_message: Optional[str] = None,
         temperature: float = 0.5,
         top_k: int = 40,
         n_generations: int = 1,
         max_tokens: int = 1024,
+        logprob: Optional[int] = None,
     ):
         self.model = model
         self.system_message = system_message
@@ -35,6 +37,7 @@ class LlamaSampler:
         self.top_k = top_k
         self.n_generations = n_generations
         self.image_format = "url"
+        self.logprob = logprob
 
     def prompt_to_message_format(self, prompt: str):
         return [
@@ -53,13 +56,17 @@ class LlamaSampler:
             try:
                 payload = {
                     "model": self.model,
-                    "messages": self.prompt_to_message_format(prompt),
-                    # "max_tokens": self.max_tokens,
-                    "max_tokens"
+                    "prompt": prompt,
+                    # "messages": self.prompt_to_message_format(prompt),
+                    "max_tokens": self.max_tokens,
                     "temperature": self.temperature,
                     "top_k": self.top_k,
                     "n": self.n_generations,
+                    "repetition_penalty": 1,
+                    "stop": ["```"]
                 }
+                if self.logprob is not None:
+                    payload["logprobs"] = self.logprob
                 response = requests.post(URL, json=payload, headers=HEADERS)
                 assert (
                     response.status_code == 200
@@ -73,3 +80,23 @@ class LlamaSampler:
                 )
                 time.sleep(exception_backoff)
                 trial += 1
+
+    def get_next_token(self, curr_text: str) -> List[Tuple[str, float]]:
+        """
+        Get the next token in the sequence using the model.
+        """
+        response = self(curr_text)
+        logprob_details = [choice["logprobs"] for choice in response["choices"]]
+        tokens_and_logprobs = [
+            (detail["tokens"][0], detail["token_logprobs"][0])  # Only look at the first token
+            for detail in logprob_details
+        ]
+        return tokens_and_logprobs
+
+    def generate(self, prompt: str) -> str:
+        """
+        Generate the completion of the code snippet
+        and return the first full generated text.
+        """
+        output = self(prompt)
+        return output["choices"][0]["message"]["content"]

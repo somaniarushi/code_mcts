@@ -7,6 +7,6 @@ run_eval(
 )
 
 clean_jsonl(
-    "outputs/samples_llama_10.jsonl",
-    "outputs/cleaned_samples_llama_10.jsonl"
+    "outputs/samples_llama_pretrain_10.jsonl",
+    "outputs/cleaned_samples_llama_pretrain_10.jsonl"
 )
