@@ -1,3 +1,0 @@
-[submodule "human-eval"]
-	path = human-eval
-	url = git@github.com:openai/human-eval.git
