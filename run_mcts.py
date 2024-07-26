@@ -33,6 +33,16 @@ def append_to_jsonl(output_jsonl_path: str, task_id: str, completion: str, rewar
                 }
             ) + "\n")
 
+def get_reward_from_completion(completion: str, problem: Dict[str, Any], model: LlamaSampler) -> float:
+    system_prompt = "Return a number between 1 and 100 based on how good you think the partial completion is for the given prompt. First explain your reasoning with Reasoning: <reasoning> then give your answer as Reward: <reward>."
+    # prompt = system_prompt + "\n\n" + problem["prompt"] + "\n\n" + completion
+    prompt = system_prompt + problem["prompt"] + "\n\n" + completion
+    response = model(prompt)
+    # Extract the reward from the response
+    reward = response["choices"][0]["text"]
+    return reward
+
+
 def main(output_jsonl_path: str, max_rollouts: int) -> None:
     next_token_generator = LlamaSampler(max_tokens=1, n_generations=3, logprob=1, temperature=1)
     rollout_generator = LlamaSampler(max_tokens=200)
@@ -78,15 +88,22 @@ def main(output_jsonl_path: str, max_rollouts: int) -> None:
             # Early exit if a solution is found
             reward = early_exit_reward_or_none(curr.state, solution_to_reward)
             if reward is None:
-                rollout = curr.state + rollout_generator.generate(curr.state)
-                completion = rollout.replace(prompt, "") # Remove the prompt for evaluation
-                completion = clean_completion(completion)
-                reward = evaluate_completion(completion, problem) # 1 if correct, 0 otherwise
-                if reward == 1:
-                    print(f"Found solution in {i + 1} steps!")
-                    solution_to_reward[rollout] = reward
+                # Use the LLM as a value network to evaluate the current state
+                if evaluate_completion(curr.state, problem) > 0:
+                    # Code is executable, use that reward
+                    reward = evaluate_completion(curr.state, problem)
                 else:
-                    print(f"Completion for task {task_id}:\n```\n{completion}\n```\n UNSUCCESSFUL with reward {reward}")
+                    reward = get_reward_from_completion(curr.state, problem, next_token_generator)
+
+                # rollout = curr.state + rollout_generator.generate(curr.state)
+                # completion = rollout.replace(prompt, "") # Remove the prompt for evaluation
+                # completion = clean_completion(completion)
+                # reward = evaluate_completion(completion, problem) # 1 if correct, 0 otherwise
+                # if reward == 1:
+                #     print(f"Found solution in {i + 1} steps!")
+                #     solution_to_reward[rollout] = reward
+                # else:
+                #     print(f"Completion for task {task_id}:\n```\n{completion}\n```\n UNSUCCESSFUL with reward {reward}")
                 # TODO: Can be more fine-grained?
 
             ##### Part 4: Backpropagation
