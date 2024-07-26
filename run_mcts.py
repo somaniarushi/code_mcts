@@ -5,6 +5,7 @@ from typing import List, Tuple, Dict, Any, Optional
 from human_eval.data import read_problems
 from evaluation import stats_execute
 
+import re
 from models.llama import LlamaSampler
 from mcts.tree import Node
 from data_processing.clean_jsonl import clean_completion
@@ -33,19 +34,31 @@ def append_to_jsonl(output_jsonl_path: str, task_id: str, completion: str, rewar
                 }
             ) + "\n")
 
-def get_reward_from_completion(completion: str, problem: Dict[str, Any], model: LlamaSampler) -> float:
-    system_prompt = "Return a number between 1 and 100 based on how good you think the partial completion is for the given prompt. First explain your reasoning with Reasoning: <reasoning> then give your answer as Reward: <reward>."
-    # prompt = system_prompt + "\n\n" + problem["prompt"] + "\n\n" + completion
-    prompt = system_prompt + problem["prompt"] + "\n\n" + completion
-    response = model(prompt)
-    # Extract the reward from the response
-    reward = response["choices"][0]["text"]
-    return reward
+def get_model_value_for_completion(completion: str, problem: Dict[str, Any], model: LlamaSampler) -> float:
+    system_prompt = "Return a number between 1 and 100 based on how good you think the partial completion is for the given prompt. First explain your reasoning with Reasoning: <reasoning> then give your answer as Reward: <reward>. BE CONCISE IN YOUR REASONING. If there is no completion, just give Reward: 0."
+    prompt = "Here is a question and a partial solution.\n"
+    if problem["prompt"] in completion:
+        prompt += completion + "\n\n"
+    else:
+        prompt += problem["prompt"] + "\n\n" + completion + "\n\n"
+    prompt += system_prompt
+    print(f"Prompt for model value:\n```\n{prompt}\n```\n")
+    response = model(prompt)    # Extract the reward from the response
+    response_str = response["choices"][0]["message"]["content"]
+    regex_string = r"Reward:\s*([0-9]+)"
+    search_result = re.search(regex_string, response_str)
+    if search_result is None:
+        print(f"Error: Could not find reward in response: {response_str}")
+        raise ValueError
+        return 0.0
+    else:
+        reward = float(search_result.group(1))
+        return reward
 
 
 def main(output_jsonl_path: str, max_rollouts: int) -> None:
     next_token_generator = LlamaSampler(max_tokens=1, n_generations=3, logprob=1, temperature=1)
-    rollout_generator = LlamaSampler(max_tokens=200)
+    value_network = LlamaSampler(model="meta-llama/Llama-3-8b-chat-hf", max_tokens=100)
     problems = read_problems()
 
     for task_id, problem in tqdm(problems.items()):
@@ -93,7 +106,7 @@ def main(output_jsonl_path: str, max_rollouts: int) -> None:
                     # Code is executable, use that reward
                     reward = evaluate_completion(curr.state, problem)
                 else:
-                    reward = get_reward_from_completion(curr.state, problem, next_token_generator)
+                    reward = get_model_value_for_completion(curr.state, problem, value_network)
 
                 # rollout = curr.state + rollout_generator.generate(curr.state)
                 # completion = rollout.replace(prompt, "") # Remove the prompt for evaluation

@@ -50,7 +50,7 @@ class LlamaSampler:
             "content": prompt
         }]
 
-    def __call__(self, prompt: str) -> str:
+    def __call__(self, prompt: str, stop_tokens=["```"]) -> str:
         trial = 0
         while trial < MAX_ALLOWED_TRIALS:
             try:
@@ -63,7 +63,7 @@ class LlamaSampler:
                     "top_k": self.top_k,
                     "n": self.n_generations,
                     "repetition_penalty": 1,
-                    "stop": ["```"]
+                    "stop": stop_tokens,
                 }
                 if self.logprob is not None:
                     payload["logprobs"] = self.logprob
