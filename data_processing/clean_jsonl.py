@@ -13,9 +13,12 @@ def clean_completion(completion: str) -> str:
         code = completion[opening_backtick + 3:closing_backtick]
 
     # If the code has a section that looks like if __name__ == "__main__":, remove it and everything after it
-    main_start = code.find("if __name__ == '__main__':")
-    if main_start != -1:
-        code = code[:main_start]
+    # main_start = code.find("if __name__ == '__main__':")
+    # if main_start != -1:
+    #     code = code[:main_start]
+    # main_start = code.find('if __name__ == "__main__":')
+    # if main_start != -1:
+    #     code = code[:main_start]
     return code.strip()
 
 def clean_data(data_point: Dict[str, Any]) -> Dict[str, Any]:
