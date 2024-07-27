@@ -1,8 +1,10 @@
-from run_eval import run_eval
+from __future__ import annotations
+
 from data_processing.clean_jsonl import clean_jsonl
+from run_eval import run_eval
 
 run_eval(
-    outpath="outputs",
+    outpath='outputs',
     n_samples=64,
 )
 

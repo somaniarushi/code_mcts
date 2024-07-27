@@ -1,15 +1,20 @@
+from __future__ import annotations
+
 import itertools
 import math
-from typing import List, Tuple
+from typing import List
+from typing import Tuple
 
 C_BASE = 10
 C = 4
 
 # Source: https://github.com/rmshin/llm-mcts
+
+
 class Node:
     id_iter = itertools.count()
 
-    def __init__(self, label: str, logprob: float, state: str, parent: "Node") -> None:
+    def __init__(self, label: str, logprob: float, state: str, parent: Node) -> None:
         """
         Initializes a new node in the search tree.
 
@@ -19,7 +24,7 @@ class Node:
             state: The full generated text.
             parent: The parent node.
         """
-        self.value = 0 # Will be updated through backprop
+        self.value = 0  # Will be updated through backprop
         self.prob = math.exp(logprob)
         self.state = state
 
@@ -41,9 +46,9 @@ class Node:
                 self.parent.backprop(value)
 
     def __repr__(self) -> str:
-        return f"Node({self.state}) | {self.prob:.2f}"
+        return f'Node({self.state}) | {self.prob:.2f}'
 
-    def get_child_by_ucb_confidence(self) -> Tuple["Node", float]:
+    def get_child_by_ucb_confidence(self) -> tuple[Node, float]:
         parent, children = self, self.children
         parent_visits = parent.visits
         # ß(s) = log((s.visits + c_base + 1) / c_base) + c
