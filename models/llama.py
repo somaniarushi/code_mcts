@@ -21,8 +21,8 @@ class LlamaSampler:
 
     def __init__(
         self,
-        # model: str = "meta-llama/Llama-3-8b-chat-hf",
-        model: str = "meta-llama/Llama-3-8b-hf",
+        model: str = "meta-llama/Llama-3-8b-chat-hf",
+        # model: str = "meta-llama/Llama-3-8b-hf",
         system_message: Optional[str] = None,
         temperature: float = 0.5,
         top_k: int = 40,
@@ -50,7 +50,7 @@ class LlamaSampler:
             "content": prompt
         }]
 
-    def __call__(self, prompt: str) -> str:
+    def __call__(self, prompt: str, *, stop_tokens: List[str] = ["```"]) -> str:
         trial = 0
         while trial < MAX_ALLOWED_TRIALS:
             try:
@@ -63,7 +63,7 @@ class LlamaSampler:
                     "top_k": self.top_k,
                     "n": self.n_generations,
                     "repetition_penalty": 1,
-                    "stop": ["```"]
+                    "stop": stop_tokens,
                 }
                 if self.logprob is not None:
                     payload["logprobs"] = self.logprob
@@ -81,14 +81,14 @@ class LlamaSampler:
                 time.sleep(exception_backoff)
                 trial += 1
 
-    def get_next_token(self, curr_text: str) -> List[Tuple[str, float]]:
+    def get_next_tokens(self, curr_text: str) -> List[Tuple[List[str], List[float]]]:
         """
         Get the next token in the sequence using the model.
         """
-        response = self(curr_text)
+        response = self(curr_text, stop_tokens=["\n"])
         logprob_details = [choice["logprobs"] for choice in response["choices"]]
         tokens_and_logprobs = [
-            (detail["tokens"][0], detail["token_logprobs"][0])  # Only look at the first token
+            (detail["tokens"], detail["token_logprobs"])
             for detail in logprob_details
         ]
         return tokens_and_logprobs

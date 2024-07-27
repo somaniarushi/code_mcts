@@ -9,6 +9,11 @@ from models.llama import LlamaSampler
 from mcts.tree import Node
 from data_processing.clean_jsonl import clean_completion
 
+def print_tree(root: Node, problem_str: str, depth: int = 0) -> None:
+    tab = '\t' * depth
+    print(f"{tab}{root.state.replace(problem_str, '').strip()}\n-----\n")
+    for child in root.children:
+        print_tree(child, problem_str, depth + 1)
 
 def evaluate_completion(completion: str, problem: Dict[str, Any]) -> float:
     # response = check_correctness_fine_grained(problem, completion, timeout=3.0)
@@ -34,7 +39,12 @@ def append_to_jsonl(output_jsonl_path: str, task_id: str, completion: str, rewar
             ) + "\n")
 
 def main(output_jsonl_path: str, max_rollouts: int) -> None:
-    next_token_generator = LlamaSampler(max_tokens=1, n_generations=3, logprob=1, temperature=1)
+    next_token_generator = LlamaSampler(
+        max_tokens=100,
+        n_generations=10,
+        logprob=1,
+        temperature=1,
+    )
     rollout_generator = LlamaSampler(max_tokens=200)
     problems = read_problems()
 
@@ -60,12 +70,23 @@ def main(output_jsonl_path: str, max_rollouts: int) -> None:
                 curr.visits += 1
 
             ##### Part 2: Expansion
-            next_tokens_and_logprobs: List[Tuple[str, float]] = (
-                next_token_generator.get_next_token(curr.state)
+            next_tokens_and_logprobs: List[Tuple[List[str], List[float]]] = (
+                next_token_generator.get_next_tokens(curr.state)
             )
-            # Optimization: Dedup the next_tokens
-            next_tokens_and_logprobs = list(set(next_tokens_and_logprobs))
-            next_tokens = list(map(lambda x: x[0], next_tokens_and_logprobs))
+            next_sentences = ["".join(tokens) for tokens, _ in next_tokens_and_logprobs]
+            summed_logprobs = []
+            for _, logprob in next_tokens_and_logprobs:
+                summed_logprobs.append(sum(logprob))
+            next_tokens_and_logprobs = list(zip(next_sentences, summed_logprobs))
+            # Optimization, dedup on the next tokens
+            deduped_next_tokens_and_logprobs = []
+            seen = set()
+            for token, logprob in next_tokens_and_logprobs:
+                if token not in seen:
+                    deduped_next_tokens_and_logprobs.append((token, logprob))
+                    seen.add(token)
+            next_tokens_and_logprobs = deduped_next_tokens_and_logprobs
+
             # print(f"Next tokens: {next_tokens} with curr_state: \n```\n{curr.state}\n```\n")
             # Create child nodes
             child_nodes = [
@@ -86,7 +107,12 @@ def main(output_jsonl_path: str, max_rollouts: int) -> None:
                     print(f"Found solution in {i + 1} steps!")
                     solution_to_reward[rollout] = reward
                 else:
-                    print(f"Completion for task {task_id}:\n```\n{completion}\n```\n UNSUCCESSFUL with reward {reward}")
+                    pass
+                    # print(f"===============================")
+                    # print(f"Prefix for task {task_id}:\n```\n{curr.state}\n```\n")
+                    # print(f"----")
+                    # print(f"Completion for task {task_id}:\n```\n{completion}\n```\n UNSUCCESSFUL with reward {reward}")
+                    # print(f"===============================")
                 # TODO: Can be more fine-grained?
 
             ##### Part 4: Backpropagation
@@ -105,5 +131,7 @@ def main(output_jsonl_path: str, max_rollouts: int) -> None:
             best_reward = 0
 
         append_to_jsonl(output_jsonl_path, task_id, best_completion, best_reward, rollout_counts_for_solution)
+        print_tree(root, problem["prompt"])
+
     print(f"Output written to {output_jsonl_path}")
     print(f"Done!")

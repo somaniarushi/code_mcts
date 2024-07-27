@@ -1,3 +1,3 @@
 from run_mcts import main
 
-main("outputs/mcts_rewards_beta_with_intermediate_rewards_64rollout.jsonl", 64)
+main("outputs/mcts_rewards_beta_with_intermediate_rewards_8rollout_sentence.jsonl", 8)
